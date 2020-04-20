@@ -1,0 +1,185 @@
+/**
+*  Get a diff of a pixel and all its surroudning pixels 9x9(beat andrew).  Recursively track each
+* pixel from the bottom up.  when doing this check if it needs to be done based on a top pixel removal.  
+
+
+*/
+
+extern crate image;
+
+use std::env;
+use std::cmp;
+use image::{GenericImage, GenericImageView, ImageBuffer, RgbImage, DynamicImage, Pixel};
+
+struct DPValue<'a>{
+  diff_total: u32,
+  pix: &'a image::Rgb<u8>
+}
+
+
+fn getImage(image_name: &std::string::String) -> RgbImage {
+
+  //Get Image from /images
+  let src_dir = env::current_dir().unwrap();
+  let path_to_image = format!("{}/../images/{}", src_dir.display(), image_name);
+  
+  let image = image::open(path_to_image).unwrap();
+  
+  image.into_rgb()
+}
+
+fn SaveImage<'x>(values: &mut Vec<Vec<DPValue<'x>>>) {
+
+  let xLen: u32 = values.len() as u32;
+  let yLen: u32 = values[0].len() as u32;
+
+
+  let mut img = RgbImage::new(x, y);
+
+  for x in 0..xLen {
+    for y in 0..yLen {
+      img.put_pixel(x,y, values[x][y].pix);
+    }
+  }
+
+  //let image_buf = from_vec(values.len(), values[0].len(), img);
+
+  img.save("test.png").unwrap;
+}
+
+//Function 
+fn getTotalPixelDiff<'x>(w: usize, h: usize,values: &mut Vec<Vec<DPValue<'x>>>) -> u32 {
+  
+  // Get value of all pixels in 9x9 grid and add them then average that
+  // Get GetTotalPixelDiff of topleft,top,topright pixels
+  // add this value to those diffs; return. 
+
+
+  //note when doing through check against lastTopRemovedPixel(later defined) to see
+  // if this value needs to be reevaluated
+
+  let mut personalDiff: u32 = 0;
+  let mut sum:          u32 = 0;
+  let mut divisor:      u32 = 0;
+  let width:            i32 = w as i32;
+  let height:           i32 = h as i32;
+
+  let mut sumAboveDiffs:u32 = 0;
+
+  for x in cmp::max(0,width-3)..cmp::min((values.len()-1) as i32, width+3) {
+    for y in cmp::max(0,height-3)..cmp::min((values[0].len()-1) as i32, height+3) {
+
+      let xVal = x as usize;
+      let yVal = y as usize;
+      let mut rgbSum: u32 = 0;
+
+      rgbSum += values[xVal][yVal].pix[0] as u32;
+      rgbSum += values[xVal][yVal].pix[1] as u32;
+      rgbSum += values[xVal][yVal].pix[2] as u32;
+
+      sum += (rgbSum as u32) /3;
+      divisor += 1;
+    }
+  }
+  
+  personalDiff = sum/divisor;
+
+  if h == 0 {
+    values[w][h].diff_total = personalDiff;
+    return values[w][h].diff_total
+  }
+
+  for y in cmp::max(0,width)..cmp::min((values.len()-1) as i32,width+1) {
+    let yVal = y as usize;
+    sumAboveDiffs += getTotalPixelDiff(yVal, h-1, values);
+  }
+
+  sumAboveDiffs + personalDiff
+}
+
+//remove pixel, shift everything pop the end
+fn removePixel<'x> (w: usize, h: usize,values: &mut Vec<Vec<DPValue<'x>>>) {
+
+  values[w].remove(h);
+  if h == 0 {
+    return
+  }
+  
+  let mut minIndex: usize = w;
+  let width:            i32 = w as i32;
+  let height:           i32 = h as i32;
+
+  for y in cmp::max(0,width-1)..cmp::min(width+1,values.len() as i32) {
+    let yVal = y as usize;
+    if values[yVal][h-1].diff_total < values[minIndex][h-1].diff_total {
+      minIndex = yVal;
+    }
+  }
+
+  removePixel(minIndex,h-1,values)
+}
+
+fn main() {
+
+  let args: Vec<String> = env::args().collect();
+  let mut file_name = &"seattleSkyline.jpg".to_owned();
+  if args.len() > 1
+  {
+    file_name = &args[1];
+  }
+
+  let image = getImage(file_name);
+
+  let (width, height) = image.dimensions();
+  let width = width as usize;
+  let height = height as usize;
+  let mut diffVec = Vec::new();
+  
+  println!("About to create vector");
+  for x in 0..width {
+    let mut internalVec = Vec::new();
+    for y in 0..height {
+      let mut val: DPValue = DPValue {
+        pix: image.get_pixel(x as u32,y as u32),
+        diff_total: 0
+      };
+      internalVec.push(val);
+    }
+    diffVec.push(internalVec);
+  }
+  println!("Createdvector");
+  //End init
+
+  println!("GetTotalPixelDiff");
+  for y in 0..width {
+    getTotalPixelDiff(y, height-1, &mut diffVec);
+  } 
+  println!("Finished GotTotalPixelDiff");
+
+  let mut minIndex: usize = 0;
+  for y in 1..width {
+    let yVal = y as usize;
+
+    if diffVec[yVal][height-1].diff_total < diffVec[minIndex][height-1].diff_total {
+      minIndex = yVal;
+    }
+  }
+
+  println!("Finished removingPixels");
+  removePixel(minIndex, height-1, &mut diffVec);
+  println!("Finished removingPixels");
+
+  SaveImage(&mut diffVec);
+  
+  /*for pixel in image.pixels() {
+    let rgb_pixel = pixel.to_rgb();
+    println!("{:?}", rgb_pixel);
+    println!("{:?}", rgb_pixel[0]);
+    // Loop through all pixels at the bottom calling getTotalPixelDiff on each
+    // once your through that loop through the bottom and look for min value. Then from 
+    // there check every pixel above and repeat removing along the way.
+
+  }
+  */
+}
+

@@ -1,0 +1,7 @@
+[package]
+name = "seamCarving"
+version = "0.1.0"
+authors = ["Austinmy <mysinger.austin@gmail.com>"]
+
+[dependencies]
+image = "^0"
